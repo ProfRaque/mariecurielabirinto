@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Marie Curie: O Labirinto da Radioatividade</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js 3D Library CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Google Fonts -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@400;600;700;800&display=swap');
+        
+        * {
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+            background-color: #050811;
+            color: #f1f5f9;
+        }
+
+        .font-serif-title {
+            font-family: 'Cinzel', serif;
+        }
+
+        /* Glassmorphism visual components */
+        .glass-panel {
+            background: rgba(13, 20, 36, 0.88);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(212, 175, 55, 0.35);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+        }
+
+        .gold-glow {
+            box-shadow: 0 0 25px rgba(212, 175, 55, 0.5);
+        }
+
+        .green-glow {
+            box-shadow: 0 0 20px rgba(34, 197, 94, 0.5);
+        }
+
+        .cyan-glow {
+            box-shadow: 0 0 20px rgba(6, 182, 212, 0.5);
+        }
+
+        /* Pulse animation for exit beacon radar */
+        @keyframes beaconPulse {
+            0% { transform: scale(0.95); opacity: 0.8; }
+            50% { transform: scale(1.1); opacity: 1; }
+            100% { transform: scale(0.95); opacity: 0.8; }
+        }
+
+        .animate-beacon {
+            animation: beaconPulse 1.8s infinite ease-in-out;
+        }
+
+        /* D-Pad controls styling for touch devices */
+        .d-btn {
+            background: rgba(30, 41, 59, 0.85);
+            border: 1.5px solid rgba(212, 175, 55, 0.5);
+        }
+        .d-btn:active {
+            background: rgba(212, 175, 55, 0.4);
+        }
+    </style>
+</head>
+<body class="w-screen h-screen relative bg-slate-950 text-slate-100 overflow-hidden">
+
+    <!-- 3D Canvas Container -->
+    <div id="canvas-container" class="w-full h-full absolute inset-0 z-0"></div>
+
+    <!-- HUD Overlay -->
+    <div id="hud" class="absolute inset-0 pointer-events-none z-10 flex flex-col justify-between p-3 md:p-5 hidden">
+        
+        <!-- Top Navigation Bar -->
+        <div class="flex justify-between items-start w-full gap-3">
+            
+            <!-- Left Panel: Level Info & Radiation Shield Health -->
+            <div class="glass-panel p-3 rounded-2xl pointer-events-auto flex flex-col gap-2 min-w-[220px] md:min-w-[260px]">
+                <div class="flex items-center justify-between">
+                    <span id="hud-level-title" class="text-xs font-serif-title font-bold text-amber-300 uppercase tracking-wider">Nível 1: Laboratório</span>
+                    <span id="hud-score" class="text-xs font-bold text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-500/30">0 PTS</span>
+                </div>
+
+                <!-- Shield Bar -->
+                <div class="space-y-1">
+                    <div class="flex justify-between text-[11px] font-semibold text-slate-300">
+                        <span>BLINDAGEM (<span id="hud-shield-name" class="text-amber-300">Sem Escudo</span>)</span>
+                        <span id="hud-shield-num">100%</span>
+                    </div>
+                    <div class="w-full h-3 bg-slate-900 rounded-full overflow-hidden border border-amber-500/30 p-0.5">
+                        <div id="hud-shield-bar" class="h-full bg-gradient-to-r from-emerald-500 via-green-400 to-emerald-300 rounded-full w-full transition-all duration-300"></div>
+                    </div>
+                </div>
+
+                <!-- Geiger Status -->
+                <div class="flex items-center gap-2 pt-0.5">
+                    <div id="geiger-led" class="w-3 h-3 rounded-full bg-emerald-500 transition-colors duration-200"></div>
+                    <span class="text-xs text-slate-300">Geiger: <span id="geiger-status" class="font-bold text-emerald-400">Seguro</span></span>
+                </div>
+            </div>
+
+            <!-- Center Top: Compass / Exit Pointer -->
+            <div class="glass-panel px-4 py-2 rounded-2xl pointer-events-auto flex items-center gap-3 border-amber-400/50 gold-glow">
+                <div id="compass-arrow" class="text-xl md:text-2xl text-amber-400 transition-transform duration-100 transform origin-center">⬆️</div>
+                <div class="flex flex-col">
+                    <span class="text-[10px] text-amber-300 font-serif-title uppercase tracking-widest">PORTAL DE SAÍDA</span>
+                    <span id="compass-dist" class="text-xs font-extrabold text-slate-100">12m</span>
+                </div>
+            </div>
+
+            <!-- Right Panel: Objectives Inventory & Minimap -->
+            <div class="flex gap-3">
+                <!-- Objectives / Inventory -->
+                <div class="glass-panel p-2.5 rounded-2xl pointer-events-auto flex flex-col justify-center gap-1.5 hidden sm:flex">
+                    <span class="text-[10px] text-amber-300 font-serif-title uppercase tracking-wider text-center">AMOSTRAS</span>
+                    <div class="flex gap-2">
+                        <div id="slot-ore" class="w-10 h-10 rounded-xl bg-slate-900/90 border border-slate-700 flex items-center justify-center relative" title="Minério Alvo">
+                            <span id="icon-ore" class="text-lg opacity-30">🪨</span>
+                            <div id="check-ore" class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-emerald-500 border border-slate-950 hidden"></div>
+                        </div>
+                        <div id="slot-shield" class="w-10 h-10 rounded-xl bg-slate-900/90 border border-slate-700 flex items-center justify-center relative" title="Escudo Coletado">
+                            <span id="icon-shield" class="text-lg opacity-30">🛡️</span>
+                            <div id="check-shield" class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-emerald-500 border border-slate-950 hidden"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2D Canvas Mini-map -->
+                <div class="glass-panel p-1.5 rounded-2xl pointer-events-auto border-amber-500/40">
+                    <canvas id="minimap" width="100" height="100" class="rounded-xl bg-slate-950"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Center Prompt Indicator -->
+        <div id="interaction-prompt" class="self-center glass-panel px-6 py-3 rounded-full border-2 border-amber-400 text-amber-200 font-semibold text-sm flex items-center gap-3 animate-pulse hidden pointer-events-auto gold-glow">
+            <span class="bg-amber-500 text-slate-950 px-2.5 py-1 rounded-lg text-xs font-black">E / TOQUE</span>
+            <span id="prompt-text">Interagir</span>
+        </div>
+
+        <!-- Bottom Touch Controls (Mobile D-Pad & Action Button) -->
+        <div class="flex justify-between items-end w-full pointer-events-auto md:hidden pb-1">
+            <!-- D-Pad -->
+            <div class="relative w-36 h-36">
+                <button id="btn-up" class="d-btn absolute top-0 left-12 w-12 h-12 rounded-t-2xl flex items-center justify-center text-xl text-amber-300">▲</button>
+                <button id="btn-down" class="d-btn absolute bottom-0 left-12 w-12 h-12 rounded-b-2xl flex items-center justify-center text-xl text-amber-300">▼</button>
+                <button id="btn-left" class="d-btn absolute top-12 left-0 w-12 h-12 rounded-l-2xl flex items-center justify-center text-xl text-amber-300">◄</button>
+                <button id="btn-right" class="d-btn absolute top-12 right-0 w-12 h-12 rounded-r-2xl flex items-center justify-center text-xl text-amber-300">►</button>
+                <div class="absolute top-12 left-12 w-12 h-12 bg-slate-900/60 border border-slate-700 rounded-center"></div>
+            </div>
+
+            <!-- Action Button -->
+            <button id="btn-action" class="w-16 h-16 rounded-full glass-panel border-2 border-amber-400 text-amber-300 font-extrabold text-xs flex flex-col items-center justify-center active:scale-95 transition-transform gold-glow">
+                <span>AÇÃO</span>
+                <span class="text-[9px] text-amber-200/70">(E)</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Start Game Modal -->
+    <div id="start-modal" class="absolute inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md">
+        <div class="glass-panel border-2 border-amber-400 max-w-xl w-full p-6 md:p-8 rounded-3xl flex flex-col gap-6 text-center shadow-2xl relative overflow-hidden gold-glow">
+            
+            <div class="space-y-2">
+                <span class="text-amber-400 text-xs tracking-widest font-serif-title uppercase">Laboratório de História e Ciência — 1898</span>
+                <h1 class="text-2xl md:text-3xl font-serif-title font-extrabold text-amber-100 tracking-wide">
+                    Marie Curie: O Labirinto da Radioatividade
+                </h1>
+                <p class="text-xs md:text-sm text-slate-300 font-medium">Desafio Científico — Ensino Fundamental</p>
+            </div>
+
+            <div class="bg-slate-900/80 p-4 rounded-2xl border border-slate-800 text-left text-xs md:text-sm text-slate-300 space-y-3 leading-relaxed">
+                <p>
+                    👩‍🔬 Explore os <strong>3 níveis de labirinto</strong> com a cientista <strong>Marie Curie</strong>. Colete as amostras de minério, equipe as blindagens adequadas (Papel, Alumínio, Chumbo), resolva os enigmas sobre radiação para abrir portões e encontre a <strong>LINHA DE CHEGADA (PORTAL DE SAÍDA)</strong>!
+                </p>
+                <div class="border-t border-slate-800 pt-3 text-xs text-amber-200">
+                    <strong class="text-amber-400">Controles de Jogo:</strong>
+                    <ul class="list-disc list-inside mt-1 space-y-1 text-slate-300">
+                        <li><strong>Mover:</strong> Teclas <kbd class="px-1.5 py-0.5 bg-slate-800 border border-slate-600 rounded">WASD</kbd> ou Setas do teclado (ou D-Pad na tela).</li>
+                        <li><strong>Interagir:</strong> Pressione <kbd class="px-1.5 py-0.5 bg-slate-800 border border-slate-600 rounded">E</kbd> ou <kbd class="px-1.5 py-0.5 bg-slate-800 border border-slate-600 rounded">Espaço</kbd>.</li>
+                        <li><strong>Bússola no topo:</strong> Aponta a direção e a distância exata da **Saída do Nível**.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <button id="btn-start" class="w-full py-4 bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 hover:from-amber-500 hover:to-amber-400 text-slate-950 font-serif-title font-black text-lg rounded-2xl shadow-xl transform hover:-translate-y-0.5 transition-all gold-glow">
+                INICIAR JORNADA CIENTÍFICA
+            </button>
+        </div>
+    </div>
+
+    <!-- Interactive Quiz / Gate Modal -->
+    <div id="quiz-modal" class="absolute inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md hidden">
+        <div class="glass-panel border-2 border-amber-400 max-w-lg w-full p-6 rounded-3xl flex flex-col gap-5 shadow-2xl relative gold-glow">
+            <div class="flex items-center justify-between border-b border-amber-500/20 pb-3">
+                <div class="flex items-center gap-2">
+                    <span class="text-2xl">⚛️</span>
+                    <h2 id="quiz-title" class="font-serif-title font-bold text-lg text-amber-200">Desafio Científico</h2>
+                </div>
+                <span class="text-[10px] font-bold px-2.5 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full">ENIGMA DO PORTÃO</span>
+            </div>
+
+            <p id="quiz-question" class="text-sm md:text-base text-slate-100 font-semibold leading-relaxed">
+                Carregando pergunta...
+            </p>
+
+            <div id="quiz-options" class="flex flex-col gap-2.5">
+                <!-- Dynamic options -->
+            </div>
+
+            <div id="quiz-feedback" class="p-3.5 rounded-2xl text-xs md:text-sm hidden leading-relaxed"></div>
+
+            <button id="btn-quiz-continue" class="w-full py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold rounded-xl hidden transition-colors">
+                CONTINUAR JOGANDO
+            </button>
+        </div>
+    </div>
+
+    <!-- Level Complete / Transition Modal -->
+    <div id="level-complete-modal" class="absolute inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md hidden">
+        <div class="glass-panel border-2 border-emerald-400 max-w-lg w-full p-6 md:p-8 rounded-3xl flex flex-col gap-5 text-center shadow-2xl green-glow">
+            <div class="text-5xl animate-bounce">🚪✨</div>
+            <h2 id="lvl-complete-title" class="text-2xl font-serif-title font-extrabold text-emerald-300">Nível Concluído!</h2>
+            <p id="lvl-complete-desc" class="text-xs md:text-sm text-slate-200 bg-slate-900/80 p-4 rounded-2xl border border-emerald-500/30 leading-relaxed">
+                Você coletou a amostra e atravessou o Portal de Saída com sucesso!
+            </p>
+            <button id="btn-next-level" class="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-serif-title font-bold text-base rounded-2xl transition-all green-glow">
+                AVANÇAR PARA O PRÓXIMO NÍVEL
+            </button>
+        </div>
+    </div>
+
+    <!-- Victory Final Nobel Modal -->
+    <div id="win-modal" class="absolute inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-md hidden">
+        <div class="glass-panel border-2 border-amber-400 max-w-lg w-full p-6 md:p-8 rounded-3xl flex flex-col gap-6 text-center shadow-2xl gold-glow">
+            <div class="text-6xl animate-bounce">🏆</div>
+            
+            <div class="space-y-1">
+                <span class="text-amber-400 text-xs font-serif-title uppercase tracking-widest">CONQUISTA HISTÓRICA SUPREMA!</span>
+                <h2 class="text-2xl md:text-3xl font-serif-title font-black text-amber-100">Prêmio Nobel Concedido!</h2>
+            </div>
+
+            <p class="text-xs md:text-sm text-slate-200 leading-relaxed bg-slate-900/80 p-4 rounded-2xl border border-amber-500/30">
+                Parabéns! Você concluiu todos os 3 níveis do labirinto com <strong>Marie Curie</strong>, isolou a <strong>Pechblenda</strong>, o <strong>Polônio</strong> e o <strong>Rádio</strong>, dominou as blindagens de radiação ($\alpha, \beta, \gamma$) e alcançou o Pódio Dourado do Prêmio Nobel!
+            </p>
+
+            <div class="grid grid-cols-2 gap-3 text-center text-xs">
+                <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-800">
+                    <span class="block text-amber-400 font-extrabold text-base">3 / 3</span>
+                    <span class="text-slate-400 text-[10px]">Níveis Concluídos</span>
+                </div>
+                <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-800">
+                    <span id="win-final-score" class="block text-emerald-400 font-extrabold text-base">300 PTS</span>
+                    <span class="text-slate-400 text-[10px]">Pontuação Científica</span>
+                </div>
+            </div>
+
+            <button id="btn-restart" class="w-full py-3.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-serif-title font-bold text-base rounded-2xl transition-all">
+                JOGAR NOVAMENTE
+            </button>
+        </div>
+    </div>
+
+    <script>
+        /* Web Audio API Sound Synthesizer */
+        class SoundEngine {
+            constructor() { this.ctx = null; }
+
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+            }
+
+            playGeigerClick() {
+                if (!this.ctx) return;
+                const bufferSize = this.ctx.sampleRate * 0.004;
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'bandpass';
+                filter.frequency.value = 1400 + Math.random() * 600;
+
+                const gain = this.ctx.createGain();
+                gain.gain.setValueAtTime(0.12, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.004);
+
+                noise.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.ctx.destination);
+                noise.start();
+            }
+
+            playCollect() {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(523.25, now);
+                osc.frequency.exponentialRampToValueAtTime(1046.50, now + 0.2);
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(); osc.stop(now + 0.25);
+            }
+
+            playCorrect() {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                [523.25, 659.25, 783.99].forEach((freq, i) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.frequency.value = freq;
+                    gain.gain.setValueAtTime(0.15, now + i * 0.08);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.2);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now + i * 0.08);
+                    osc.stop(now + i * 0.08 + 0.2);
+                });
+            }
+
+            playWrong() {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(160, now);
+                osc.frequency.linearRampToValueAtTime(110, now + 0.25);
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(); osc.stop(now + 0.25);
+            }
+
+            playLevelClear() {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                [440, 554.37, 659.25, 880].forEach((f, i) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.frequency.value = f;
+                    gain.gain.setValueAtTime(0.2, now + i * 0.1);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.1 + 0.4);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now + i * 0.1);
+                    osc.stop(now + i * 0.1 + 0.4);
+                });
+            }
+        }
+
+        const sounds = new SoundEngine();
+
+        // Level Matrixes: 1 = Wall, 0 = Path, 2 = Locked Gate, 3 = Shield Item, 4 = Target Ore, 5 = Exit Portal, 6 = Hazard Zone
+        const LEVEL_DEFINITIONS = [
+            {
+                id: 1,
+                title: "Nível 1: O Laboratório de Paris",
+                subtitle: "Minério de Pechblenda & Radiação Alfa (α)",
+                shieldName: "Folha de Papel",
+                shieldType: "papel",
+                oreName: "Pechblenda",
+                oreIcon: "🪨",
+                grid: [
+                    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                    [1, 0, 0, 0, 1, 0, 0, 0, 0, 4, 1],
+                    [1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1],
+                    [1, 3, 1, 0, 0, 0, 1, 6, 1, 0, 1],
+                    [1, 1, 1, 1, 1, 2, 1, 6, 1, 0, 1],
+                    [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1],
+                    [1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1],
+                    [1, 0, 0, 0, 6, 0, 1, 0, 0, 5, 1],
+                    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+                ],
+                startPos: { x: 1, z: 1 },
+                quiz: {
+                    title: "Enigma 1: Radiação Alfa (α)",
+                    question: "A radiação Alfa (α) possui alto poder de ionização, mas baixa penetração na matéria. Qual material simples é suficiente para bloqueá-la?",
+                    options: [
+                        { text: "Uma simples folha de papel", correct: true, explanation: "Correto! As partículas Alfa são pesadas e bloqueadas até por uma folha de papel ou pela pele." },
+                        { text: "Uma parece espessa de chumbo", correct: false, explanation: "O chumbo bloqueia radiação Gama, mas para a Alfa, papel já é suficiente." },
+                        { text: "Nenhum material consegue parar a radiação Alfa", correct: false, explanation: "Incorreto. A radiação Alfa tem o menor alcance de todas." }
+                    ]
+                }
+            },
+            {
+                id: 2,
+                title: "Nível 2: Descoberta do Polônio",
+                subtitle: "Isolando o Polônio (Po-210) & Radiação Beta (β)",
+                shieldName: "Placa de Alumínio",
+                shieldType: "aluminio",
+                oreName: "Polônio",
+                oreIcon: "🧪",
+                grid: [
+                    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                    [1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 3, 1],
+                    [1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 0, 1],
+                    [1, 0, 1, 0, 0, 0, 1, 6, 6, 6, 1, 0, 1],
+                    [1, 1, 1, 1, 1, 2, 1, 6, 4, 6, 1, 0, 1],
+                    [1, 0, 0, 0, 1, 0, 1, 6, 6, 6, 1, 0, 1],
+                    [1, 0, 1, 0, 1, 0, 1, 1, 1, 2, 1, 0, 1],
+                    [1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+                    [1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 5, 1],
+                    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+                ],
+                startPos: { x: 1, z: 1 },
+                quiz: {
+                    title: "Enigma 2: Cálculo de Meia-Vida",
+                    question: "Se Marie Curie isolou 80 gramas de Polônio com meia-vida de 20 minutos, quanta massa radioativa restará após 40 minutos?",
+                    options: [
+                        { text: "40 gramas", correct: false, explanation: "40g é o valor após 1 meia-vida (20 minutos)." },
+                        { text: "20 gramas", correct: true, explanation: "Exato! Após 20 min cai para 40g, e após mais 20 min (40 min total) cai pela metade novamente, restando 20g!" },
+                        { text: "0 gramas", correct: false, explanation: "A radiação diminui pela metade em cada ciclo, não desaparece instantaneamente." }
+                    ]
+                }
+            },
+            {
+                id: 3,
+                title: "Nível 3: O Rádio & O Prêmio Nobel",
+                subtitle: "O Brilho do Rádio (Ra-226) & Radiação Gama (γ)",
+                shieldName: "Avental de Chumbo",
+                shieldType: "chumbo",
+                oreName: "Rádio",
+                oreIcon: "⚛️",
+                grid: [
+                    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                    [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 4, 1],
+                    [1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1],
+                    [1, 0, 1, 3, 1, 0, 2, 0, 1, 6, 1, 0, 1],
+                    [1, 0, 1, 0, 1, 1, 1, 0, 1, 6, 1, 0, 1],
+                    [1, 0, 0, 0, 0, 0, 0, 0, 0, 6, 0, 0, 1],
+                    [1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1],
+                    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 1],
+                    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+                ],
+                startPos: { x: 1, z: 1 },
+                quiz: {
+                    title: "Enigma 3: Radiação Gama (γ)",
+                    question: "A radiação Gama (γ) é constituída por ondas eletromagnéticas de altíssima energia. Qual elemento denso é necessário para detê-la?",
+                    options: [
+                        { text: "Blocos densos de Chumbo ou Concreto", correct: true, explanation: "Perfeito! A radiação Gama atravessa papel e alumínio, exigindo chumbo denso para ser contida." },
+                        { text: "Uma placa de madeira fina", correct: false, explanation: "Madeira fina é atravessada facilmente por radiação Gama." },
+                        { text: "Uma folha de papel dobrada", correct: false, explanation: "Papel bloqueia apenas radiação Alfa." }
+                    ]
+                }
+            }
+        ];
+
+        let currentLevelIdx = 0;
+        let gameState = {
+            shield: 100,
+            hasShield: false,
+            hasOre: false,
+            gatesUnlocked: {},
+            score: 0,
+            gameActive: false,
+            geigerTimer: 0
+        };
+
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x050811);
+        scene.fog = new THREE.FogExp2(0x050811, 0.07);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0x384259, 1.2);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xd4af37, 0.9);
+        dirLight.position.set(12, 25, 12);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 1024;
+        dirLight.shadow.mapSize.height = 1024;
+        scene.add(dirLight);
+
+        // Procedural Textures
+        function createWallTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256; canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#1e140d'; ctx.fillRect(0, 0, 256, 256);
+            ctx.strokeStyle = '#2e1f15'; ctx.lineWidth = 4;
+            for (let y = 0; y < 256; y += 32) {
+                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(256, y); ctx.stroke();
+            }
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        const wallMat = new THREE.MeshStandardMaterial({ map: createWallTexture(), roughness: 0.8 });
+        const CELL_SIZE = 3;
+
+        // Marie Curie 3D Character Model
+        function createMarieCurie() {
+            const Marie = new THREE.Group();
+            const dressMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.7 });
+            const skirt = new THREE.Mesh(new THREE.ConeGeometry(0.55, 1.2, 16), dressMat);
+            skirt.position.y = 0.6;
+            
+            const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.35, 0.7, 16), dressMat);
+            torso.position.y = 1.2;
+
+            const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.1, 16), new THREE.MeshStandardMaterial({ color: 0xf8fafc }));
+            collar.position.y = 1.5;
+
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 16, 16), new THREE.MeshStandardMaterial({ color: 0xffdbac, roughness: 0.5 }));
+            head.position.y = 1.7;
+
+            const hairBun = new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 12), new THREE.MeshStandardMaterial({ color: 0x271910 }));
+            hairBun.position.set(0, 1.82, -0.12);
+
+            const flask = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.18, 8), new THREE.MeshStandardMaterial({ color: 0x39ff14, emissive: 0x22c55e }));
+            flask.position.set(0.3, 1.1, 0.25);
+
+            Marie.add(skirt, torso, collar, head, hairBun, flask);
+            Marie.traverse(c => { if (c.isMesh) c.castShadow = true; });
+            return Marie;
+        }
+
+        // Exit Portal with Vertical 3D Light Beam (Beacon)
+        function createExitPortalMesh() {
+            const portalGroup = new THREE.Group();
+
+            // Golden Base Podium
+            const baseGeo = new THREE.CylinderGeometry(1.2, 1.4, 0.3, 32);
+            const baseMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.8, roughness: 0.2, emissive: 0xb45309 });
+            const base = new THREE.Mesh(baseGeo, baseMat);
+            base.position.y = 0.15;
+
+            // Rotating Glowing Ring
+            const ringGeo = new THREE.TorusGeometry(1.0, 0.08, 16, 32);
+            const ringMat = new THREE.MeshStandardMaterial({ color: 0xfef08a, emissive: 0xeab308 });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.rotation.x = Math.PI / 2;
+            ring.position.y = 0.35;
+
+            // Vertical Light Beam (Beacon)
+            const beamGeo = new THREE.CylinderGeometry(0.8, 0.8, 15, 32, 1, true);
+            const beamMat = new THREE.MeshBasicMaterial({ color: 0xfde047, transparent: true, opacity: 0.45, side: THREE.DoubleSide });
+            const beam = new THREE.Mesh(beamGeo, beamMat);
+            beam.position.y = 7.5;
+
+            // Point Light
+            const pLight = new THREE.PointLight(0xfde047, 4, 12);
+            pLight.position.y = 2;
+
+            portalGroup.add(base, ring, beam, pLight);
+            return { group: portalGroup, ring: ring };
+        }
+
+        const playerMesh = createMarieCurie();
+        scene.add(playerMesh);
+
+        let levelMeshes = [];
+        let levelInteractables = [];
+        let exitPortalObj = null;
+        let exitPosition = { x: 0, z: 0 };
+
+        function loadLevel(idx) {
+            // Clean up previous level meshes
+            levelMeshes.forEach(m => scene.remove(m));
+            levelMeshes = [];
+            levelInteractables = [];
+
+            const lvl = LEVEL_DEFINITIONS[idx];
+            gameState.hasShield = false;
+            gameState.hasOre = false;
+            gameState.shield = 100;
+            gameState.gatesUnlocked = {};
+
+            // Update HUD text & icons
+            document.getElementById('hud-level-title').innerText = lvl.title;
+            document.getElementById('hud-shield-name').innerText = "Sem Escudo";
+            document.getElementById('icon-ore').innerText = lvl.oreIcon;
+            document.getElementById('hud-shield-bar').style.width = '100%';
+            document.getElementById('check-ore').classList.add('hidden');
+            document.getElementById('check-shield').classList.add('hidden');
+
+            const grid = lvl.grid;
+            const rows = grid.length;
+            const cols = grid[0].length;
+
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    const type = grid[r][c];
+                    const x = c * CELL_SIZE;
+                    const z = r * CELL_SIZE;
+
+                    if (type === 1) { // Wall
+                        const wall = new THREE.Mesh(new THREE.BoxGeometry(CELL_SIZE, 3, CELL_SIZE), wallMat);
+                        wall.position.set(x, 1.5, z);
+                        wall.castShadow = true; wall.receiveShadow = true;
+                        scene.add(wall);
+                        levelMeshes.push(wall);
+                    } else if (type === 2) { // Gate Door
+                        const gateGroup = new THREE.Group();
+                        gateGroup.position.set(x, 0, z);
+                        const frameMat = new THREE.MeshStandardMaterial({ color: 0x3d2817 });
+                        const barMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.8 });
+                        
+                        const post1 = new THREE.Mesh(new THREE.BoxGeometry(0.3, 3, 0.3), frameMat);
+                        post1.position.set(-CELL_SIZE/2 + 0.15, 1.5, 0);
+                        const post2 = new THREE.Mesh(new THREE.BoxGeometry(0.3, 3, 0.3), frameMat);
+                        post2.position.set(CELL_SIZE/2 - 0.15, 1.5, 0);
+                        const bars = new THREE.Mesh(new THREE.BoxGeometry(CELL_SIZE - 0.6, 2.6, 0.1), barMat);
+                        bars.position.set(0, 1.3, 0);
+
+                        gateGroup.add(post1, post2, bars);
+                        scene.add(gateGroup);
+                        levelMeshes.push(gateGroup);
+
+                        levelInteractables.push({ type: 'gate', gridX: c, gridZ: r, mesh: bars, unlocked: false });
+                    } else if (type === 3) { // Shield Pickup
+                        const shieldMesh = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.8, 0.2), new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.5 }));
+                        shieldMesh.position.set(x, 0.8, z);
+                        scene.add(shieldMesh);
+                        levelMeshes.push(shieldMesh);
+                        levelInteractables.push({ type: 'shield', gridX: c, gridZ: r, mesh: shieldMesh, collected: false });
+                    } else if (type === 4) { // Target Ore
+                        const oreGeo = new THREE.DodecahedronGeometry(0.5, 1);
+                        const oreMat = new THREE.MeshStandardMaterial({ color: idx === 0 ? 0x22c55e : idx === 1 ? 0x06b6d4 : 0x39ff14, emissive: 0x15803d });
+                        const ore = new THREE.Mesh(oreGeo, oreMat);
+                        ore.position.set(x, 0.7, z);
+
+                        const pLight = new THREE.PointLight(idx === 0 ? 0x22c55e : 0x06b6d4, 3, 6);
+                        pLight.position.set(x, 0.8, z);
+
+                        scene.add(ore, pLight);
+                        levelMeshes.push(ore, pLight);
+                        levelInteractables.push({ type: 'ore', gridX: c, gridZ: r, mesh: ore, light: pLight, collected: false });
+                    } else if (type === 5) { // EXIT PORTAL BEACON
+                        const exitData = createExitPortalMesh();
+                        exitData.group.position.set(x, 0, z);
+                        scene.add(exitData.group);
+                        levelMeshes.push(exitData.group);
+                        exitPortalObj = exitData;
+                        exitPosition = { x: x, z: z, gridX: c, gridZ: r };
+                    } else if (type === 6) { // Hazard Zone
+                        const hazardPlane = new THREE.Mesh(new THREE.PlaneGeometry(CELL_SIZE, CELL_SIZE), new THREE.MeshBasicMaterial({ color: 0xef4444, transparent: true, opacity: 0.35 }));
+                        hazardPlane.rotation.x = -Math.PI / 2;
+                        hazardPlane.position.set(x, 0.02, z);
+                        scene.add(hazardPlane);
+                        levelMeshes.push(hazardPlane);
+                    }
+                }
+            }
+
+            // Floor Plane
+            const floorGeo = new THREE.PlaneGeometry(cols * CELL_SIZE, rows * CELL_SIZE);
+            const floorMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.6 });
+            const floor = new THREE.Mesh(floorGeo, floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            floor.position.set((cols * CELL_SIZE)/2 - CELL_SIZE/2, 0, (rows * CELL_SIZE)/2 - CELL_SIZE/2);
+            floor.receiveShadow = true;
+            scene.add(floor);
+            levelMeshes.push(floor);
+
+            // Set Player Start Position
+            playerMesh.position.set(lvl.startPos.x * CELL_SIZE, 0, lvl.startPos.z * CELL_SIZE);
+            gameState.gameActive = true;
+        }
+
+        const keys = { w: false, a: false, s: false, d: false, e: false };
+
+        window.addEventListener('keydown', (e) => {
+            const k = e.key.toLowerCase();
+            if (k === 'w' || k === 'arrowup') keys.w = true;
+            if (k === 'a' || k === 'arrowleft') keys.a = true;
+            if (k === 's' || k === 'arrowdown') keys.s = true;
+            if (k === 'd' || k === 'arrowright') keys.d = true;
+            if (k === 'e' || k === ' ') { if (!keys.e) handleInteraction(); keys.e = true; }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            const k = e.key.toLowerCase();
+            if (k === 'w' || k === 'arrowup') keys.w = false;
+            if (k === 'a' || k === 'arrowleft') keys.a = false;
+            if (k === 's' || k === 'arrowdown') keys.s = false;
+            if (k === 'd' || k === 'arrowright') keys.d = false;
+            if (k === 'e' || k === ' ') keys.e = false;
+        });
+
+        function bindTouch(id, key) {
+            const btn = document.getElementById(id);
+            btn.addEventListener('touchstart', (e) => { e.preventDefault(); keys[key] = true; if (key==='e') handleInteraction(); });
+            btn.addEventListener('touchend', (e) => { e.preventDefault(); keys[key] = false; });
+            btn.addEventListener('mousedown', () => { keys[key] = true; if (key==='e') handleInteraction(); });
+            btn.addEventListener('mouseup', () => { keys[key] = false; });
+        }
+        bindTouch('btn-up', 'w'); bindTouch('btn-down', 's'); bindTouch('btn-left', 'a'); bindTouch('btn-right', 'd'); bindTouch('btn-action', 'e');
+
+        function updatePlayer(delta) {
+            if (!gameState.gameActive) return;
+
+            const speed = 4.8 * delta;
+            let mx = 0, mz = 0;
+
+            if (keys.w) mz -= 1;
+            if (keys.s) mz += 1;
+            if (keys.a) mx -= 1;
+            if (keys.d) mx += 1;
+
+            if (mx !== 0 || mz !== 0) {
+                const len = Math.sqrt(mx * mx + mz * mz);
+                mx = (mx / len) * speed;
+                mz = (mz / len) * speed;
+
+                playerMesh.rotation.y = Math.atan2(mx, mz);
+
+                const newX = playerMesh.position.x + mx;
+                const newZ = playerMesh.position.z + mz;
+
+                function canMove(px, pz) {
+                    const c = Math.round(px / CELL_SIZE);
+                    const r = Math.round(pz / CELL_SIZE);
+                    const lvl = LEVEL_DEFINITIONS[currentLevelIdx];
+                    if (r < 0 || r >= lvl.grid.length || c < 0 || c >= lvl.grid[0].length) return false;
+                    const tile = lvl.grid[r][c];
+                    if (tile === 1) return false; // Wall
+                    if (tile === 2) { // Gate
+                        const gate = levelInteractables.find(i => i.type === 'gate' && i.gridX === c && i.gridZ === r);
+                        if (gate && !gate.unlocked) return false;
+                    }
+                    return true;
+                }
+
+                if (canMove(newX, playerMesh.position.z)) playerMesh.position.x = newX;
+                if (canMove(playerMesh.position.x, newZ)) playerMesh.position.z = newZ;
+            }
+
+            // Camera follow
+            camera.position.x = playerMesh.position.x;
+            camera.position.y = playerMesh.position.y + 7.5;
+            camera.position.z = playerMesh.position.z + 6.5;
+            camera.lookAt(playerMesh.position.x, playerMesh.position.y + 1, playerMesh.position.z);
+
+            // Rotate exit beacon ring
+            if (exitPortalObj) exitPortalObj.ring.rotation.z += 1.5 * delta;
+
+            // Check Proximities & Hazards
+            const pCol = Math.round(playerMesh.position.x / CELL_SIZE);
+            const pRow = Math.round(playerMesh.position.z / CELL_SIZE);
+            const currentTile = LEVEL_DEFINITIONS[currentLevelIdx].grid[pRow][pCol];
+
+            // Radiation Hazard Zone Check
+            if (currentTile === 6) {
+                sounds.playGeigerClick();
+                document.getElementById('geiger-led').className = 'w-3 h-3 rounded-full bg-red-500 animate-ping';
+                document.getElementById('geiger-status').innerText = 'PERIGO DE RADIAÇÃO!';
+                document.getElementById('geiger-status').className = 'font-bold text-red-400';
+
+                if (!gameState.hasShield) {
+                    gameState.shield = Math.max(0, gameState.shield - 25 * delta);
+                    document.getElementById('hud-shield-bar').style.width = gameState.shield + '%';
+                }
+            } else {
+                document.getElementById('geiger-led').className = 'w-3 h-3 rounded-full bg-emerald-500';
+                document.getElementById('geiger-status').innerText = 'Seguro';
+                document.getElementById('geiger-status').className = 'font-bold text-emerald-400';
+            }
+
+            // Check Exit Portal Proximity
+            const distToExit = Math.sqrt(Math.pow(playerMesh.position.x - exitPosition.x, 2) + Math.pow(playerMesh.position.z - exitPosition.z, 2));
+            
+            // Update Compass Arrow
+            const dx = exitPosition.x - playerMesh.position.x;
+            const dz = exitPosition.z - playerMesh.position.z;
+            const angleRad = Math.atan2(dx, -dz);
+            const angleDeg = angleRad * (180 / Math.PI);
+            document.getElementById('compass-arrow').style.transform = `rotate(${angleDeg}deg)`;
+            document.getElementById('compass-dist').innerText = `${Math.round(distToExit)}m`;
+
+            // Prompt Update
+            let nearInteractable = null;
+            levelInteractables.forEach(item => {
+                const dist = Math.sqrt(Math.pow(item.gridX - pCol, 2) + Math.pow(item.gridZ - pRow, 2));
+                if (dist <= 1 && !item.collected && !item.unlocked) nearInteractable = item;
+            });
+
+            const promptEl = document.getElementById('interaction-prompt');
+            const promptText = document.getElementById('prompt-text');
+
+            if (distToExit <= 1.8) {
+                promptEl.classList.remove('hidden');
+                promptText.innerText = "ENTRAR NO PORTAL DE SAÍDA";
+                gameState.activePrompt = 'exit';
+            } else if (nearInteractable) {
+                promptEl.classList.remove('hidden');
+                gameState.activePrompt = nearInteractable;
+                if (nearInteractable.type === 'gate') promptText.innerText = "Resolver Enigma do Portão";
+                else if (nearInteractable.type === 'shield') promptText.innerText = `Coletar ${LEVEL_DEFINITIONS[currentLevelIdx].shieldName}`;
+                else if (nearInteractable.type === 'ore') promptText.innerText = `Coletar Amostra de ${LEVEL_DEFINITIONS[currentLevelIdx].oreName}`;
+            } else {
+                promptEl.classList.add('hidden');
+                gameState.activePrompt = null;
+            }
+        }
+
+        function handleInteraction() {
+            if (!gameState.activePrompt || !gameState.gameActive) return;
+
+            if (gameState.activePrompt === 'exit') {
+                if (gameState.hasOre) {
+                    levelCleared();
+                } else {
+                    alertModal(`Atenção: Você precisa coletar a amostra de ${LEVEL_DEFINITIONS[currentLevelIdx].oreName} antes de cruzar o Portal de Saída!`);
+                }
+            } else if (gameState.activePrompt.type === 'gate') {
+                openQuizModal();
+            } else if (gameState.activePrompt.type === 'shield') {
+                gameState.activePrompt.collected = true;
+                gameState.activePrompt.mesh.visible = false;
+                gameState.hasShield = true;
+                gameState.shield = 100;
+                document.getElementById('hud-shield-bar').style.width = '100%';
+                document.getElementById('hud-shield-name').innerText = LEVEL_DEFINITIONS[currentLevelIdx].shieldName;
+                document.getElementById('check-shield').classList.remove('hidden');
+                sounds.playCollect();
+            } else if (gameState.activePrompt.type === 'ore') {
+                gameState.activePrompt.collected = true;
+                gameState.activePrompt.mesh.visible = false;
+                if (gameState.activePrompt.light) gameState.activePrompt.light.visible = false;
+                gameState.hasOre = true;
+                gameState.score += 100;
+                document.getElementById('hud-score').innerText = `${gameState.score} PTS`;
+                document.getElementById('check-ore').classList.remove('hidden');
+                sounds.playCollect();
+            }
+        }
+
+        function openQuizModal() {
+            gameState.gameActive = false;
+            const quiz = LEVEL_DEFINITIONS[currentLevelIdx].quiz;
+            const modal = document.getElementById('quiz-modal');
+            const optionsContainer = document.getElementById('quiz-options');
+            const feedbackEl = document.getElementById('quiz-feedback');
+            const btnContinue = document.getElementById('btn-quiz-continue');
+
+            document.getElementById('quiz-title').innerText = quiz.title;
+            document.getElementById('quiz-question').innerText = quiz.question;
+            optionsContainer.innerHTML = '';
+            feedbackEl.classList.add('hidden');
+            btnContinue.classList.add('hidden');
+
+            quiz.options.forEach((opt, idx) => {
+                const btn = document.createElement('button');
+                btn.className = 'w-full text-left p-3 rounded-2xl bg-slate-900 border border-slate-700 hover:border-amber-400 text-xs md:text-sm font-medium flex items-start gap-2 text-slate-100 transition-all';
+                btn.innerHTML = `<span class="font-bold text-amber-400">${String.fromCharCode(65 + idx)})</span> <span>${opt.text}</span>`;
+                
+                btn.onclick = () => {
+                    Array.from(optionsContainer.children).forEach(b => b.disabled = true);
+                    feedbackEl.classList.remove('hidden');
+
+                    if (opt.correct) {
+                        sounds.playCorrect();
+                        btn.className = 'w-full text-left p-3 rounded-2xl bg-emerald-950 border-2 border-emerald-500 text-xs md:text-sm font-semibold flex items-start gap-2 text-emerald-100';
+                        feedbackEl.className = 'p-3 rounded-2xl text-xs md:text-sm bg-emerald-950/90 border border-emerald-500 text-emerald-200';
+                        feedbackEl.innerHTML = `<strong>✅ RESPOSTA CORRETA!</strong><br>${opt.explanation}`;
+                        
+                        // Unlock gate
+                        const gate = gameState.activePrompt;
+                        gate.unlocked = true;
+                        gate.mesh.position.y += 3;
+                        btnContinue.classList.remove('hidden');
+                    } else {
+                        sounds.playWrong();
+                        btn.className = 'w-full text-left p-3 rounded-2xl bg-rose-950 border-2 border-rose-500 text-xs md:text-sm font-semibold flex items-start gap-2 text-rose-100';
+                        feedbackEl.className = 'p-3 rounded-2xl text-xs md:text-sm bg-rose-950/90 border border-rose-500 text-rose-200';
+                        feedbackEl.innerHTML = `<strong>❌ TENTE NOVAMENTE!</strong><br>${opt.explanation}`;
+                        setTimeout(() => { Array.from(optionsContainer.children).forEach(b => b.disabled = false); }, 1800);
+                    }
+                };
+                optionsContainer.appendChild(btn);
+            });
+
+            modal.classList.remove('hidden');
+        }
+
+        document.getElementById('btn-quiz-continue').onclick = () => {
+            document.getElementById('quiz-modal').classList.add('hidden');
+            gameState.gameActive = true;
+        };
+
+        function alertModal(msg) {
+            gameState.gameActive = false;
+            document.getElementById('quiz-title').innerText = "Aviso do Laboratório";
+            document.getElementById('quiz-question').innerText = msg;
+            document.getElementById('quiz-options').innerHTML = '';
+            document.getElementById('quiz-feedback').classList.add('hidden');
+            document.getElementById('btn-quiz-continue').classList.remove('hidden');
+            document.getElementById('quiz-modal').classList.remove('hidden');
+        }
+
+        function levelCleared() {
+            gameState.gameActive = false;
+            sounds.playLevelClear();
+
+            if (currentLevelIdx < LEVEL_DEFINITIONS.length - 1) {
+                document.getElementById('lvl-complete-desc').innerText = `Você isolou a amostra de ${LEVEL_DEFINITIONS[currentLevelIdx].oreName} e cruzou a linha de chegada! Prepare-se para o próximo desafio.`;
+                document.getElementById('level-complete-modal').classList.remove('hidden');
+            } else {
+                // Final Nobel Win!
+                document.getElementById('win-final-score').innerText = `${gameState.score + 100} PTS`;
+                document.getElementById('win-modal').classList.remove('hidden');
+            }
+        }
+
+        document.getElementById('btn-next-level').onclick = () => {
+            document.getElementById('level-complete-modal').classList.add('hidden');
+            currentLevelIdx++;
+            loadLevel(currentLevelIdx);
+        };
+
+        const minimapCanvas = document.getElementById('minimap');
+        const minimapCtx = minimapCanvas.getContext('2d');
+
+        function drawMinimap() {
+            const w = minimapCanvas.width;
+            const h = minimapCanvas.height;
+            const lvl = LEVEL_DEFINITIONS[currentLevelIdx];
+            const rows = lvl.grid.length;
+            const cols = lvl.grid[0].length;
+            const scaleX = w / cols;
+            const scaleY = h / rows;
+
+            minimapCtx.clearRect(0, 0, w, h);
+
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    const tile = lvl.grid[r][c];
+                    if (tile === 1) {
+                        minimapCtx.fillStyle = '#334155';
+                        minimapCtx.fillRect(c * scaleX, r * scaleY, scaleX, scaleY);
+                    } else if (tile === 5) { // Exit Portal
+                        minimapCtx.fillStyle = '#f59e0b';
+                        minimapCtx.fillRect(c * scaleX, r * scaleY, scaleX, scaleY);
+                    }
+                }
+            }
+
+            // Draw Player dot
+            const pCol = playerMesh.position.x / CELL_SIZE;
+            const pRow = playerMesh.position.z / CELL_SIZE;
+            minimapCtx.fillStyle = '#ef4444';
+            minimapCtx.beginPath();
+            minimapCtx.arc((pCol + 0.5) * scaleX, (pRow + 0.5) * scaleY, scaleX / 2.5, 0, Math.PI * 2);
+            minimapCtx.fill();
+        }
+
+        document.getElementById('btn-start').onclick = () => {
+            sounds.init();
+            document.getElementById('start-modal').classList.add('hidden');
+            document.getElementById('hud').classList.remove('hidden');
+            loadLevel(0);
+        };
+
+        document.getElementById('btn-restart').onclick = () => {
+            window.location.reload();
+        };
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        const clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+            updatePlayer(delta);
+            if (gameState.gameActive) drawMinimap();
+            renderer.render(scene, camera);
+        }
+
+        window.onload = function() {
+            animate();
+        };
+    </script>
+</body>
+</html>
